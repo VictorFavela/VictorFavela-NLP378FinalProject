@@ -1,0 +1,14 @@
+# Numerical computing
+numpy
+# Pytorch
+torch==1.8.1
+# Progress bar for training
+tqdm
+# Remove Emoji
+emoji
+# Gazetter Datset
+names-dataset
+# nltk pos tagging
+nltk
+# HuggingFace Transformers
+transformers

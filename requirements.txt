@@ -12,3 +12,7 @@ names-dataset
 nltk
 # HuggingFace Transformers
 transformers
+# CRF layer
+pytorch-crf
+# AllenNLP
+allennlp

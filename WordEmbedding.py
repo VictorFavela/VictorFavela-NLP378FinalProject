@@ -1,5 +1,7 @@
 from itertools import repeat
 
+from tqdm import tqdm
+
 from names_dataset import NameDataset
 import nltk
 nltk.download('averaged_perceptron_tagger')
@@ -39,26 +41,42 @@ def CreateEmbeddings(sentences, labels):
     ## Embeddings List - Matrix of shape (number of sentences, 64, 1 + 1 + BertSize * 2)
     ## Labels List - Matrix of shape (number of sentences, 64)
 
+    ## Encode Labels as Longs
+    labelEncoder = {
+        'O' : 0,
+        'I' : 1,
+        'B' : 2,
+    }
+
     ## Create Gazetter Encoding
     gazetterList = CreateGazetter(sentences)
 
+    print("finished gazetting")
+
     ## Create POS-Tagging Encoding
     posList = CreatePOSTagging(sentences)
+
+    print("finished pos tagging")
 
     ## Generate distilBert word Tokenizations
     tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-cased')
 
     distilBertModel = DistilBertModel.from_pretrained('distilbert-base-cased', output_hidden_states = True)
+
+    distilBertModel.requires_grad_(False)
+    
     distilBertModel.eval()
 
     wordEmbeddings = []
     wordLabels = []
 
-    for sentence,label,gazetter,pos in zip(sentences,labels,gazetterList,posList):
+    for sentence,label,gazetter,pos in tqdm(zip(sentences,labels,gazetterList,posList),total = len(sentences)):
         sentenceL = []
         labelL = []
         gazetterL = []
         posL = []
+
+        label = [labelEncoder[i] for i in label]
 
         for word,lab,gazet,p in zip(sentence,label,gazetter,pos):
 
@@ -72,11 +90,12 @@ def CreateEmbeddings(sentences, labels):
             gazetterL.extend(repeat(gazet , n_subwords))
             posL.extend(repeat(p , n_subwords))
 
-        wordLabels.append(labelL)
-
         sentenceL = torch.LongTensor(sentenceL)
+        labelL = torch.LongTensor(labelL)
         gazetterL = torch.LongTensor(gazetterL).unsqueeze(1)
         posL = torch.LongTensor(posL).unsqueeze(1)
+
+        wordLabels.append(labelL)
         
         #Feed into Distilbert
 
@@ -90,6 +109,9 @@ def CreateEmbeddings(sentences, labels):
 
         wordEmbeddings.append(wordEmbedding)
 
-    wordEmbeddings_padded = pad_sequence(wordEmbeddings, batch_first = True)
+    print("finished bert encoding")
 
-    return wordEmbeddings_padded, wordLabels
+    wordEmbeddings_padded = pad_sequence(wordEmbeddings, batch_first = True)
+    wordLabels_padded = pad_sequence(wordLabels, batch_first = True)
+
+    return wordEmbeddings_padded.tolist(), wordLabels_padded.tolist()

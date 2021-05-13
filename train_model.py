@@ -8,8 +8,8 @@ import torch.optim as optim
 
 from tqdm import tqdm
 
-from Preprocess import PreprocessSentences
-from WordEmbedding import CreateEmbeddings
+from Preprocess import PreprocessSentences, PreprocessSentencesT
+from WordEmbedding import CreateEmbeddings, CreateEmbeddingsT
 
 from bilstm_crf import BiLSTM_CRF
 
@@ -77,11 +77,13 @@ def main():
     ## Create Optimizer
     optimizer = optim.Adadelta(filter(lambda p: p.requires_grad,
                                       model.parameters()),
-                               lr= .5)
+                               lr= .1)
 
     ## Train for epochs using tqdm
-    for i in tqdm(range(5), unit = 'epoch'):
+    for i in tqdm(range(25), unit = 'epoch'):
         train_epoch(model, EmbeddingsList, LabelsList, optimizer)
+
+    Predict('data/dev/dev.nolabels.txt', model)
 
 def train_epoch(model, EmbeddingsList, LabelsList, optimizer):
 
@@ -102,9 +104,9 @@ def train_epoch(model, EmbeddingsList, LabelsList, optimizer):
     LabelsList = torch.LongTensor(LabelsList)
     MaskList = torch.ByteTensor(MaskList)
 
-    EmbeddingsList = torch.split(EmbeddingsList,5)
-    LabelsList = torch.split(LabelsList,5)
-    MaskList =torch.split(MaskList, 5)
+    EmbeddingsList = torch.split(EmbeddingsList,15)
+    LabelsList = torch.split(LabelsList,15)
+    MaskList =torch.split(MaskList, 15)
 
     model.train()
 
@@ -121,6 +123,98 @@ def train_epoch(model, EmbeddingsList, LabelsList, optimizer):
 
     ## Save Epoch
 
+
+def Predict(filename, model):
+
+    ## Read prediction data
+    trainfile = open(filename,'r', encoding = 'utf8')
+
+    SentenceListOrig = []
+
+    currentSentence = []
+
+    while True:
+        line = trainfile.readline()
+
+        if not line:
+            SentenceListOrig.append(currentSentence)
+            break
+
+        if line != '\n':
+            ## Add to current
+            line = line.rstrip('\n')
+
+            currentSentence.append(line)
+        else:
+            ## Add to list
+            SentenceListOrig.append(currentSentence)
+
+            currentSentence = []
+
+    trainfile.close()
+
+    #Preprocess Data
+    SentenceList= PreprocessSentencesT(SentenceListOrig.copy())
+
+    ## Get Word Embeddings
+
+    EmbeddingsList, wordDictionaries = CreateEmbeddingsT(SentenceList)
+
+    model.eval()
+
+    max_size = len(EmbeddingsList[0])
+
+    MaskList = []
+    for Embedding in EmbeddingsList:
+        mask = []
+        for word in Embedding:
+            mask.append(0 if (sum(word) == 0) else 1)
+        MaskList.append(mask)
+
+    EmbeddingsList = torch.LongTensor(EmbeddingsList)
+    MaskList = torch.ByteTensor(MaskList)
+
+    TagList = []
+
+    for sentence, masks in zip(EmbeddingsList, MaskList):
+        emmissions = model(sentence.unsqueeze(0), masks.unsqueeze(0), max_size)
+
+        tags_pred = model.crf.decode(emmissions,masks.unsqueeze(0))[0]
+
+        TagList.append(tags_pred)
+
+    tag2letter = {
+        0 : 'O',
+        1 : 'I',
+        2 : 'B'
+    }
+
+    f = open(filename + "_output.txt", 'w')
+
+    print("writting to file")
+
+    for  sentence, tags, dict in tqdm(itertools.zip_longest(SentenceListOrig,TagList,wordDictionaries), total = len(SentenceListOrig)):
+        for word in sentence:
+            indexlist = []
+
+            for key,value in dict.items():
+                if word == value:
+                    indexlist.append(key)
+
+            if (len(indexlist) == 0):
+                f.write('O')
+                f.write('\n')
+            else:
+                consideredTags = []
+                for index in indexlist:
+                    consideredTags.append(tags[index])
+
+                finaltag = tag2letter[max(consideredTags)]
+
+                f.write(finaltag)
+                f.write('\n')
+        f.write('\n')
+    f.close()
 
 
 if __name__ == '__main__':

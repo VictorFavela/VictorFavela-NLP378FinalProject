@@ -63,7 +63,7 @@ def CreateEmbeddings(sentences, labels):
 
     distilBertModel = DistilBertModel.from_pretrained('distilbert-base-cased', output_hidden_states = True)
 
-    distilBertModel.requires_grad_(False)
+    #distilBertModel.requires_grad_(False)
     
     distilBertModel.eval()
 
@@ -101,9 +101,9 @@ def CreateEmbeddings(sentences, labels):
 
         output = distilBertModel(sentenceL.unsqueeze(0))
 
-        last_hidden = output.last_hidden_state.squeeze()
+        last_hidden = output.last_hidden_state.squeeze(0)
 
-        second_hidden = output.hidden_states[5].squeeze()
+        second_hidden = output.hidden_states[5].squeeze(0)
 
         wordEmbedding = torch.cat((gazetterL,posL,last_hidden,second_hidden),1)
 
@@ -115,3 +115,70 @@ def CreateEmbeddings(sentences, labels):
     wordLabels_padded = pad_sequence(wordLabels, batch_first = True)
 
     return wordEmbeddings_padded.tolist(), wordLabels_padded.tolist()
+
+def CreateEmbeddingsT(sentences):
+    ## Create Gazetter Encoding
+    gazetterList = CreateGazetter(sentences)
+
+    ## Create POS-Tagging Encoding
+    posList = CreatePOSTagging(sentences)
+
+    ## Generate distilBert word Tokenizations
+    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-cased')
+
+    distilBertModel = DistilBertModel.from_pretrained('distilbert-base-cased', output_hidden_states = True)
+
+    distilBertModel.requires_grad_(False)
+    
+    distilBertModel.eval()
+
+    wordEmbeddings = []
+    wordDictionaries = []
+
+    for sentence,gazetter,pos in tqdm(zip(sentences,gazetterList,posList),total = len(sentences)):
+        sentenceL = []
+        gazetterL = []
+        posL = []
+
+        index2word = {}
+
+        currentIndex = 0
+
+        for word,gazet,p in zip(sentence,gazetter,pos):
+
+            tokenized_word = tokenizer.tokenize(word)
+            n_subwords = len(tokenized_word)
+
+            for index in list(range(currentIndex, currentIndex + n_subwords)):
+                index2word[index] = word
+
+            currentIndex += n_subwords
+
+            word_id = tokenizer.convert_tokens_to_ids(tokenized_word)
+            sentenceL.extend(word_id)
+
+            gazetterL.extend(repeat(gazet , n_subwords))
+            posL.extend(repeat(p , n_subwords))
+
+        sentenceL = torch.LongTensor(sentenceL)
+        gazetterL = torch.LongTensor(gazetterL).unsqueeze(1)
+        posL = torch.LongTensor(posL).unsqueeze(1)
+        
+        #Feed into Distilbert
+
+        output = distilBertModel(sentenceL.unsqueeze(0))
+
+        last_hidden = output.last_hidden_state.squeeze(0)
+
+        second_hidden = output.hidden_states[5].squeeze(0)
+
+        wordEmbedding = torch.cat((gazetterL,posL,last_hidden,second_hidden),1)
+
+        wordEmbeddings.append(wordEmbedding)
+        wordDictionaries.append(index2word)
+
+    print("finished bert encoding")
+
+    wordEmbeddings_padded = pad_sequence(wordEmbeddings, batch_first = True)
+
+    return wordEmbeddings_padded.tolist(), wordDictionaries

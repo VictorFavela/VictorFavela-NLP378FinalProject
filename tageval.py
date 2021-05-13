@@ -131,7 +131,7 @@ def evaluate_taggings(goldseq_predseq_pairs, ignore_labels=False):
 def read_tokens_tags_file(filename):
     """Returns list of sentences.  each sentence is a pair (tokens, tags), each
     of which is a list of strings of the same length."""
-    sentences = open(filename).read().strip().split("\n\n")
+    sentences = open(filename, encoding = 'utf-8').read().strip().split("\n\n")
     ret = []
     for sent in sentences:
         sent = sent.strip()
@@ -145,7 +145,7 @@ def read_tokens_tags_file(filename):
     return ret
 
 def read_tags_file(filename):
-    sentences = open(filename).read().strip().split("\n\n")
+    sentences = open(filename, encoding = 'utf-8').read().strip().split("\n\n")
     ret = []
     for sent in sentences:
         sent = sent.strip()

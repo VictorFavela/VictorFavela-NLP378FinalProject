@@ -11,7 +11,7 @@ class BiLSTM_CRF(nn.Module):
 
     def __init__(self):
         super(BiLSTM_CRF,self).__init__()
-        self.num_features = 1538
+        self.num_features = 3077
         self.num_classes = 3
         self.bilstm = nn.LSTM(self.num_features,256,batch_first = True, bidirectional = True)
         self.fc = nn.Linear(512,self.num_classes)

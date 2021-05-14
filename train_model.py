@@ -16,6 +16,14 @@ from bilstm_crf import BiLSTM_CRF
 logger = logging.getLogger(__name__)
 
 def main():
+    model = train()
+
+    print("begin evaluation")
+
+    Predict('data/test/test.nolabels.txt', model)
+
+
+def train():
 
     torch.manual_seed(1)
     if torch.cuda.is_available():
@@ -62,6 +70,8 @@ def main():
 
     print("finished Pre processing")
 
+    SentenceList = SentenceList[int(len(SentenceList)/2):]
+
     ## Get Word Embeddings
 
     EmbeddingsList, LabelsList = CreateEmbeddings(SentenceList, LabelsList)
@@ -71,19 +81,22 @@ def main():
     ## Create Model
     model = BiLSTM_CRF()
 
+    print("model isntantiated")
+
     ## Move model to GPU if running with Cuda
     #model = model.cuda()
 
     ## Create Optimizer
     optimizer = optim.Adadelta(filter(lambda p: p.requires_grad,
                                       model.parameters()),
-                               lr= .1)
+                               lr= .5)
 
     ## Train for epochs using tqdm
-    for i in tqdm(range(25), unit = 'epoch'):
+    for i in tqdm(range(20), unit = 'epoch'):
+    #for i in range(3):
         train_epoch(model, EmbeddingsList, LabelsList, optimizer)
 
-    Predict('data/dev/dev.nolabels.txt', model)
+    return model
 
 def train_epoch(model, EmbeddingsList, LabelsList, optimizer):
 
@@ -104,17 +117,21 @@ def train_epoch(model, EmbeddingsList, LabelsList, optimizer):
     LabelsList = torch.LongTensor(LabelsList)
     MaskList = torch.ByteTensor(MaskList)
 
-    EmbeddingsList = torch.split(EmbeddingsList,15)
-    LabelsList = torch.split(LabelsList,15)
-    MaskList =torch.split(MaskList, 15)
+    EmbeddingsList = torch.split(EmbeddingsList,5)
+    LabelsList = torch.split(LabelsList,5)
+    MaskList =torch.split(MaskList, 5)
 
     model.train()
 
-    for batch, labels, masks in tqdm(itertools.zip_longest(EmbeddingsList,LabelsList, MaskList), total = len(EmbeddingsList)):
+    Period_Loss = 0
 
+    for batch, labels, masks in tqdm(itertools.zip_longest(EmbeddingsList,LabelsList, MaskList), total = len(EmbeddingsList)):
+    #for batch,labels,masks in itertools.zip_longest(EmbeddingsList,LabelsList, MaskList):
         emmissions = model(batch, masks, max_size)
 
         loss = -model.crf(emmissions,labels, mask = masks)
+
+        Period_Loss += loss
 
         optimizer.zero_grad()
         loss.backward()
@@ -122,6 +139,8 @@ def train_epoch(model, EmbeddingsList, LabelsList, optimizer):
         model.global_step += 1
 
     ## Save Epoch
+    print("Loss: ", Period_Loss)
+
 
 
 def Predict(filename, model):
@@ -153,14 +172,22 @@ def Predict(filename, model):
 
     trainfile.close()
 
+    print("file read")
+
     #Preprocess Data
     SentenceList= PreprocessSentencesT(SentenceListOrig.copy())
+
+    print("pre processing done")
 
     ## Get Word Embeddings
 
     EmbeddingsList, wordDictionaries = CreateEmbeddingsT(SentenceList)
 
+    print("word embedding done")
+
     model.eval()
+
+    print("eval mode done")
 
     max_size = len(EmbeddingsList[0])
 
@@ -189,7 +216,7 @@ def Predict(filename, model):
         2 : 'B'
     }
 
-    f = open(filename + "_output.txt", 'w')
+    f = open(filename + "_Output", 'w')
 
     print("writting to file")
 

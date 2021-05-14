@@ -19,7 +19,7 @@ def CreateGazetter(sentences):
         currentSentence = []
 
         for word in sentence:
-            currentSentence.append(((m.search_first_name(word) + m.search_last_name(word)) / 200))
+            currentSentence.append([m.search_first_name(word) , m.search_last_name(word)])
         
         gazetterList.append(currentSentence)
     
@@ -31,14 +31,16 @@ def CreatePOSTagging(sentences):
     for sentence in sentences:
         currentSentence = []
         for word in sentence:
-            currentSentence.append((1 if nltk.pos_tag(word)[0][1] == 'NNP' else 0) )
+            currentSentence.append([(1 if nltk.pos_tag([word])[0][1] == 'NN' else 0)
+                                    ,(1 if nltk.pos_tag([word])[0][1] == 'VB' else 0)
+                                    ,(1 if nltk.pos_tag([word])[0][1] == 'NNP' else 0)] )
         posList.append(currentSentence)
 
     return posList
 
 def CreateEmbeddings(sentences, labels):
     ## Create Embeddings list and corresponding labels:
-    ## Embeddings List - Matrix of shape (number of sentences, 64, 1 + 1 + BertSize * 2)
+    ## Embeddings List - Matrix of shape (number of sentences, 64, 2 + 3 + BertSize * 4)
     ## Labels List - Matrix of shape (number of sentences, 64)
 
     ## Encode Labels as Longs
@@ -63,7 +65,7 @@ def CreateEmbeddings(sentences, labels):
 
     distilBertModel = DistilBertModel.from_pretrained('distilbert-base-cased', output_hidden_states = True)
 
-    #distilBertModel.requires_grad_(False)
+    distilBertModel.requires_grad_(False)
     
     distilBertModel.eval()
 
@@ -92,8 +94,8 @@ def CreateEmbeddings(sentences, labels):
 
         sentenceL = torch.LongTensor(sentenceL)
         labelL = torch.LongTensor(labelL)
-        gazetterL = torch.LongTensor(gazetterL).unsqueeze(1)
-        posL = torch.LongTensor(posL).unsqueeze(1)
+        gazetterL = torch.LongTensor(gazetterL)
+        posL = torch.LongTensor(posL)
 
         wordLabels.append(labelL)
         
@@ -105,7 +107,11 @@ def CreateEmbeddings(sentences, labels):
 
         second_hidden = output.hidden_states[5].squeeze(0)
 
-        wordEmbedding = torch.cat((gazetterL,posL,last_hidden,second_hidden),1)
+        third_hidden = output.hidden_states[4].squeeze(0)
+
+        fourth_hidden = output.hidden_states[3].squeeze(0)
+
+        wordEmbedding = torch.cat((gazetterL,posL,last_hidden,second_hidden, third_hidden, fourth_hidden),1)
 
         wordEmbeddings.append(wordEmbedding)
 
@@ -161,8 +167,8 @@ def CreateEmbeddingsT(sentences):
             posL.extend(repeat(p , n_subwords))
 
         sentenceL = torch.LongTensor(sentenceL)
-        gazetterL = torch.LongTensor(gazetterL).unsqueeze(1)
-        posL = torch.LongTensor(posL).unsqueeze(1)
+        gazetterL = torch.LongTensor(gazetterL)
+        posL = torch.LongTensor(posL)
         
         #Feed into Distilbert
 
@@ -172,7 +178,11 @@ def CreateEmbeddingsT(sentences):
 
         second_hidden = output.hidden_states[5].squeeze(0)
 
-        wordEmbedding = torch.cat((gazetterL,posL,last_hidden,second_hidden),1)
+        third_hidden = output.hidden_states[4].squeeze(0)
+
+        fourth_hidden = output.hidden_states[3].squeeze(0)
+
+        wordEmbedding = torch.cat((gazetterL,posL,last_hidden,second_hidden, third_hidden, fourth_hidden),1)
 
         wordEmbeddings.append(wordEmbedding)
         wordDictionaries.append(index2word)
